@@ -34,8 +34,11 @@ class Renamer(Plugin):
 
         addEvent('app.load', self.scan)
 
-        fireEvent('schedule.interval', 'renamer.check_snatched', self.checkSnatched, minutes = self.conf('run_every'))
-        fireEvent('schedule.interval', 'renamer.check_snatched_forced', self.scan, hours = 2)
+        if self.conf('run_every') > 0:
+            fireEvent('schedule.interval', 'renamer.check_snatched', self.checkSnatched, minutes = self.conf('run_every'))
+
+        if self.conf('force_every') > 0:
+            fireEvent('schedule.interval', 'renamer.check_snatched_forced', self.scan, hours = self.conf('force_every'))
 
     def scanView(self):
 
@@ -310,7 +313,10 @@ class Renamer(Plugin):
                         elif release.status_id is snatched_status.get('id'):
                             if release.quality.id is group['meta_data']['quality']['id']:
                                 log.debug('Marking release as downloaded')
-                                release.status_id = downloaded_status.get('id')
+                                try:
+                                    release.status_id = downloaded_status.get('id')
+                                except Exception, e:
+                                    log.error('Failed marking release as finished: %s %s', (e, traceback.format_exc()))
                                 db.commit()
 
                 # Remove leftover files
@@ -347,7 +353,10 @@ class Renamer(Plugin):
 
             # Delete leftover folder from older releases
             for delete_folder in delete_folders:
-                self.deleteEmptyFolder(delete_folder, show_error = False)
+                try:
+                    self.deleteEmptyFolder(delete_folder, show_error = False)
+                except Exception, e:
+                    log.error('Failed to delete folder: %s %s', (e, traceback.format_exc()))
 
             # Rename all files marked
             group['renamed_files'] = []
@@ -383,7 +392,10 @@ class Renamer(Plugin):
 
             # Notify on download, search for trailers etc
             download_message = 'Downloaded %s (%s)' % (movie_title, replacements['quality'])
-            fireEvent('renamer.after', message = download_message, group = group, in_order = True)
+            try:
+                fireEvent('renamer.after', message = download_message, group = group, in_order = True)
+            except:
+                log.error('Failed firing (some) of the renamer.after events: %s', traceback.format_exc())
 
             # Break if CP wants to shut down
             if self.shuttingDown():
